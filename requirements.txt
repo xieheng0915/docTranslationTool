@@ -1,0 +1,6 @@
+openai
+xmltojson
+xmltodict
+requests
+streamlit
+langchain
