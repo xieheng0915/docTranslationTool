@@ -98,97 +98,33 @@ def get_warning(warning_sect):
     return warning_data
 
 
-# find html elements, build json by sequence
-def build_json_sequence(sects,layer):
-    sect_docs = {}
-    doc_data = []
-    for sect in sects:
-       #call sect process
-        sect_data = build_json_sect1(sect)
-        doc_data.append(sect_data)
-    
-    sect_docs.update({'sect1': doc_data})
-    return sect_docs
-
-# build json for sect1 layer
-def build_json_sect1(sect):
-    sect_data = []
-    # Sect definition
-    nextLayer = 'h3'
-    nextSect = 'sect2'
-    
-    # Sect title
-    title = sect.find('h2').text
-    sect_data.append({'title': title})
-    #first element under sectionbody 
-    sect_body = sect.find('div', class_='sectionbody').find_all('div', recursive=False)
-    for element in sect_body:
-        if 'paragraph' in element['class']:
-            paragraphs = build_paragraphs(element)
-            sect_data.append({'paragraph': paragraphs})
-        elif 'listingblock' in element['class']:
-            code_data = element.find('code').text
-            sect_data.append({'code': code_data})
-        elif 'sect2' in element['class']:
-            sect2_data = build_json_after_sect2(element,'h3')            
-            sect_data.append({'sect2': sect2_data})
-    
-   
-    #return data
-    return sect_data
-
-# build json for sect2 and after
-def build_json_after_sect2(sect, layer):
-    sect_data = []
-    # sect2, h3; sect3, h4; sect4, h5...
-    nextSect = 'sect' + str(int(layer[-1]))
-    nextLayer = 'h' + str(int(layer[-1]) + 1)
-
-    curr_element = sect.find(layer)
-    sect_data.append({'title': curr_element.text})
-    nextSiblings = curr_element.find_next_siblings('div', recursive=False)
-    for element in nextSiblings:
-        if 'paragraph' in element['class']:
-            paragraphs = build_paragraphs(element)
-            sect_data.append({'paragraph': paragraphs})
-        elif 'listingblock' in element['class']:
-            code_data = element.find('code').text
-            sect_data.append({'code': code_data})
-        elif 'dlist' in element['class']:
-            dlist_data = get_dlist(element)
-            sect_data.append({'dlist': dlist_data})
-        elif 'ulist' in element['class']:
-            ulist_data = get_ulist(element)
-            sect_data.append({'ulist': ulist_data})
-        elif 'admonitionblock warning' in element['class']:
-            warning_data = get_warning(element)
-            sect_data.append({'warning': warning_data})
-        elif nextSect in element['class']:
-            nextSectData = build_json_after_sect2(element, nextLayer)
-            sect_data.append({nextSect: nextSectData})
-        
-
-
-    return sect_data
-
-
-# scrape html
-def walkthrough_html(html):
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
-    page = requests.get(html, headers)
-    soup = bs(page.text, "html.parser")
-    # get h1 titles
-    # preamble paragraph
-
-    sects = soup.find_all('div', class_='sect1')
-    #json_=build_json(sects, 'h2')
-    json_=build_json_sequence(sects, 'h2')
-    #json_=build_json_for_elements(soup)
-    print(json.dumps(json_, indent=4))
-
-    
-    
+def walkthrough_sects(sect, sectLayer):
+  sect_data = []
+  sect_group = sect.findChildren('div', recursive=False)
+  nextSect = 'sect' + str(int(sectLayer[-1]) + 1)
+  for element in sect_group:
+    if 'paragraph' in element['class']:
+      #print(element)
+      paragraphs = build_paragraphs(element)
+      sect_data.append({'paragraph': paragraphs})
+    elif 'listingblock' in element['class']:
+      code_data = element.find('code').text
+      sect_data.append({'code': code_data})
+    elif 'dlist' in element['class']:
+      dlist_data = get_dlist(element)
+      sect_data.append({'dlist': dlist_data})
+    elif 'ulist' in element['class']:
+      ulist_data = get_ulist(element)
+      sect_data.append({'ulist': ulist_data})
+    elif 'admonitionblock warning' in element['class']:
+      warning_data = get_warning(element)
+      sect_data.append({'warning': warning_data})
+    elif nextSect in element['class']:
+      nextSectData = walkthrough_sects(element, nextSect)
+      sect_data.append({nextSect: nextSectData})
+      pass
+      
+  return sect_data
    
             
         
