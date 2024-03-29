@@ -84,6 +84,20 @@ def get_dlist(dlist):
 
     return dl_data  
 
+# get warning message
+def get_warning(warning_sect):
+    warning_data = []
+    warning = warning_sect.find('table').find('tbody').find('tr')
+    children = warning.findChildren(recursive=False)
+    for child in children:
+        if child.name == 'td':
+            if child.get('class') == ['icon']:
+                warning_data.append({'icon': child.find('i').get('title')})
+            elif child.get('class') == ['content']:
+                warning_data.append({'content': child.text})
+    return warning_data
+
+
 # find html elements, build json by sequence
 def build_json_sequence(sects,layer):
     sect_docs = {}
@@ -146,6 +160,9 @@ def build_json_after_sect2(sect, layer):
         elif 'ulist' in element['class']:
             ulist_data = get_ulist(element)
             sect_data.append({'ulist': ulist_data})
+        elif 'admonitionblock warning' in element['class']:
+            warning_data = get_warning(element)
+            sect_data.append({'warning': warning_data})
         elif nextSect in element['class']:
             nextSectData = build_json_after_sect2(element, nextLayer)
             sect_data.append({nextSect: nextSectData})
