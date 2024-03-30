@@ -1,36 +1,48 @@
-from utils import *
+from bs4 import BeautifulSoup as bs
+import requests
 import json
-from mdutils.mdutils import MdUtils
+from utils import *
 
 html_link = "https://solr.apache.org/guide/solr/latest/indexing-guide/indexing-with-update-handlers.html"
+
+
 
 headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
 page = requests.get(html_link, headers)
 soup = bs(page.text, "html.parser")
 
+
 # page title
-page_title = soup.find('h1').text
-mdFile = MdUtils(file_name='output/' + page_title)
-mdFile.new_header(level=1, title=page_title)
+page_data = {}
+page_data['title'] = soup.find('h1').text
 
 # page preambl
+preamble_data = []
 preamble = soup.find('div', id='preamble').find('div', class_='sectionbody').find_all('div', recursive=False)
 for p in preamble:
-  mdFile.new_paragraph(p.text)
+  preamble_data.append({'paragraph': p.text})
+page_data['preamble'] = preamble_data
 
 
 ## sections
 sect1_grp = soup.find_all('div', class_='sect1')
+sect_data = []
 for sect in sect1_grp:
-  mdFile.new_header(level=2, title=sect.find('h2').text)
   sectbody = sect.find('div', class_='sectionbody')
-  walkthrough_to_md(sectbody,'sect1',mdFile)
+  #sect_data = build_sect1_data(sect_block, 'sect1')
+  sect1_data_ = walkthrough_sects(sectbody,'sect1')
+  sect_data.append({'sect1': sect1_data_})
+page_data['content'] = sect_data
 
-#create markdown file
-mdFile.create_md_file()
+# save to json file
+filename = soup.find('h1').text.replace(" ", "_").lower()
+jsonfile = open('json/' + filename + '.json', 'w')
+json.dump(page_data, jsonfile, indent=4)
+
+
+   
 
 
 
-
-
+  

@@ -4,3 +4,4 @@ xmltodict
 requests
 streamlit
 langchain
+mdutils

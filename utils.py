@@ -116,7 +116,7 @@ def walkthrough_sects(sect, sectLayer):
     elif 'ulist' in element['class']:
       ulist_data = get_ulist(element)
       sect_data.append({'ulist': ulist_data})
-    elif 'admonitionblock warning' in element['class']:
+    elif 'admonitionblock' in element['class']:
       warning_data = get_warning(element)
       sect_data.append({'warning': warning_data})
     elif nextSect in element['class']:
@@ -126,11 +126,151 @@ def walkthrough_sects(sect, sectLayer):
       
   return sect_data
    
-            
-        
-        
+#Function to convert html to markdown and json both
+def walkthrough_to_json_md(sect, sectLayer, mdFile):
+  sect_data = []
+  sect_group = sect.findChildren('div', recursive=False)
+  nextSect = 'sect' + str(int(sectLayer[-1]) + 1)
+  title_tag = 'h' + str(int(nextSect[-1]) + 1)
+  mdFileLevel = int(nextSect[-1]) + 1
+  for element in sect_group:
+    if element.find(title_tag):
+      title = element.find(title_tag).text
+      mdFile.new_header(level=mdFileLevel, title=title)
+      sect_data.append({'title': title})
+    if 'paragraph' in element['class']:
+      #print(element)
+      paragraphs = build_paragraphs(element)
+      mdFile.new_paragraph(paragraphs)
+      sect_data.append({'paragraph': paragraphs})
+    elif 'listingblock' in element['class']:
+      code_data = element.find('code').text
+      mdFile.write('\n```\n' + code_data + '\n```\n')
+      sect_data.append({'code': code_data})
+    elif 'dlist' in element['class']:
+      dlist_data = insert_dlist(element,mdFile)
+      sect_data.append({'dlist': dlist_data})
+    elif 'ulist' in element['class']:
+      ulist_data = get_ulist(element)
+      mdFile.new_list(ulist_data)
+      sect_data.append({'ulist': ulist_data})
+    elif 'admonitionblock' in element['class']:
+      message_data = insert_marks(element.find('tr'),mdFile)
+      #sect_data.append({'warning': message_data})
+    elif nextSect in element['class']:
+      nextSectData = walkthrough_to_json_md(element, nextSect, mdFile)
+      sect_data.append({nextSect: nextSectData})
+      #pass
 
+  return sect_data
 
+def insert_dlist(dlist,mdFile):
+    dl_data = []
+    dl_sect = dlist.find('dl')
+    children = dl_sect.findChildren(recursive=False)
+    for child in children:
+        if child.name == 'dt':
+            dl_data.append({'dt': child.text})
+            mdFile.new_line(child.text, bold_italics_code='b')
+        elif child.name == 'dd':
+            table = child.find('table')
+            if table:
+                td = table.find_all('td')
+                td_data = []
+                for td_ in td:
+                    td_data.append(td_.text)
+                dl_data.append({'table': td_data})
+                mdFile.new_table(len(td_data),1,td_data, 'center')
+            paragraph = child.find('div', class_='paragraph')
+            if paragraph:
+                dl_data[-1].update({'paragraph': paragraph.text})
+                mdFile.new_line(paragraph.text.replace('\n',''), bold_italics_code='i')
+
+    return dl_data  
+
+def insert_marks(message_sect,mdFile):
+    message_data = []
+    children = message_sect.findChildren(recursive=False)
+    for child in children:
+        if child.name == 'td':
+            if child.get('class') == ['icon']:
+                info = child.find('i').get('title')
+                message_data.append({'icon': info})
+                if info == 'Warning':
+                    mdFile.new_line(':warning:'+child.find('i').get('title'))
+                elif info == 'Important':
+                  mdFile.new_line(':exclamation:'+child.find('i').get('title'))
+                elif info == 'Note':
+                  mdFile.new_line(':information_source:'+child.find('i').get('title'))
+            elif child.get('class') == ['content']:
+                message_data.append({'content': child.text})
+                mdFile.new_line(child.text)
+                
+    return message_data
+                  
+
+# function to convert html to markdown 
+def walkthrough_to_md(sect, sectLayer, mdFile):
+  sect_group = sect.findChildren('div', recursive=False)
+  nextSect = 'sect' + str(int(sectLayer[-1]) + 1)
+  title_tag = 'h' + str(int(nextSect[-1]) + 1)
+  mdFileLevel = int(nextSect[-1]) + 1
+  for element in sect_group:
+    if element.find(title_tag):
+      title = element.find(title_tag).text
+      mdFile.new_header(level=mdFileLevel, title=title)
+    if 'paragraph' in element['class']:
+      paragraphs = build_paragraphs(element)
+      mdFile.new_paragraph(paragraphs)
+    elif 'listingblock' in element['class']:
+      code_data = element.find('code').text
+      mdFile.write('\n```\n' + code_data + '\n```\n')
+    elif 'dlist' in element['class']:
+      dlist_data = insert_dlist(element,mdFile)
+    elif 'ulist' in element['class']:
+      ulist_data = get_ulist(element)
+      mdFile.new_list(ulist_data)
+    elif 'admonitionblock' in element['class']:
+      insert_marks(element.find('tr'),mdFile)
+    elif nextSect in element['class']:
+      walkthrough_to_md(element, nextSect, mdFile)
+      
+
+def insert_dlist(dlist,mdFile):
+    dl_sect = dlist.find('dl')
+    children = dl_sect.findChildren(recursive=False)
+    for child in children:
+        if child.name == 'dt':
+            mdFile.new_line(child.text, bold_italics_code='b')
+        elif child.name == 'dd':
+            table = child.find('table')
+            if table:
+                td = table.find_all('td')
+                td_data = []
+                for td_ in td:
+                    td_data.append(td_.text)
+                mdFile.new_table(len(td_data),1,td_data, 'center')
+            paragraph = child.find('div', class_='paragraph')
+            if paragraph:
+                mdFile.new_line(paragraph.text.replace('\n',''), bold_italics_code='i')
+
+    
+
+def insert_marks(message_sect,mdFile):
+    children = message_sect.findChildren(recursive=False)
+    for child in children:
+        if child.name == 'td':
+            if child.get('class') == ['icon']:
+                info = child.find('i').get('title')
+                if info == 'Warning':
+                    mdFile.new_line(':warning:'+child.find('i').get('title'))
+                elif info == 'Important':
+                  mdFile.new_line(':exclamation:'+child.find('i').get('title'))
+                elif info == 'Note':
+                  mdFile.new_line(':information_source:'+child.find('i').get('title'))
+            elif child.get('class') == ['content']:
+                mdFile.new_line(child.text)
+                
 
     
     
