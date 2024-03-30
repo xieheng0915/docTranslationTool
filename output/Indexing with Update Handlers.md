@@ -2,50 +2,41 @@
 
 
 
-# Indexing with Update Handlers
+# アップデートハンドラーを使用したインデックス作成
 
 
+更新ハンドラーは、インデックスにドキュメントを追加、削除、更新するために設計されたリクエストハンドラーです。
+Solrには、リッチドキュメントをインポートするためのプラグイン（Solr CellおよびApache Tikaを参照）だけでなく、XML、CSV、JSONの構造化されたドキュメントをインデックスするネイティブサポートもあります。
 
-Update handlers are request handlers designed to add, delete and update documents to the index.
-In addition to having plugins for importing rich documents (see Indexing with Solr Cell and Apache Tika), Solr natively supports indexing structured documents in XML, CSV, and JSON.
+リクエストハンドラーを設定し使用する推奨方法は、リクエストURLのパスにマップされるパスベースの名前を使用することです。
+ただし、リクエストディスパッチャーが適切に設定されている場合は、qt（クエリタイプ）パラメーターでリクエストハンドラーを指定することもできます。
+同じハンドラーに複数の名前でアクセスすることも可能であり、異なるデフォルトオプションを指定したい場合に便利です。
 
+単一の統合更新リクエストハンドラーは、XML、CSV、JSON、およびjavabinの更新リクエストをサポートし、ContentStreamのContent-Typeに基づいて適切なContentStreamLoaderに委任します。
 
-
-The recommended way to configure and use request handlers is with path based names that map to paths in the request URL.
-However, request handlers can also be specified with the qt (query type) parameter if the requestDispatcher is appropriately configured.
-It is possible to access the same handler using more than one name, which can be useful if you wish to specify different sets of default options.
-
-
-
-A single unified update request handler supports XML, CSV, JSON, and javabin update requests, delegating to the appropriate ContentStreamLoader based on the Content-Type of the ContentStream.
+ドキュメントをロードした後、インデックスされる前にドキュメントを前処理する必要がある場合（スキーマに対してチェックされる前でも）、SolrにはUpdate Request Handler用のドキュメント前処理プラグインがあります。これらはUpdate Request Processorと呼ばれ、デフォルトやカスタムの設定チェーンを可能にします。
+## 更新リクエストハンドラーの設定
 
 
-
-If you need to pre-process documents after they are loaded but before they are indexed (or even checked against the schema),
-Solr has document preprocessing plugins for Update Request Handlers, called Update Request Processors, which allow for default and custom configuration chains.
-
-## UpdateRequestHandler Configuration
-
-
-The default configuration file has the update request handler configured by default.
+デフォルトの設定ファイルには、デフォルトで更新リクエストハンドラが設定されています。
 ```
 <requestHandler name="/update" class="solr.UpdateRequestHandler" />
 ```
 
-## XML Formatted Index Updates
+## XML形式のインデックスの更新
 
 
-Index update commands can be sent as XML message to the update handler using Content-type: application/xml or Content-type: text/xml.
-### Adding Documents
+インデックス更新コマンドは、Content-type: application/xmlまたはContent-type: text/xmlを使用して、XMLメッセージとして更新ハンドラーに送信することができます。
+### ドキュメントの追加
 
 
-The XML schema recognized by the update handler for adding documents is very straightforward:
+ドキュメントを追加するための更新ハンドラで認識されるXMLスキーマは非常にわかりやすいです。
 - The <add> element introduces one more documents to be added.
 - The <doc> element introduces the fields making up a document.
 - The <field> element presents the content for a specific field.
 
 
-For example:
+例えば：
 ```
 <add>
   <doc>
@@ -67,74 +58,72 @@ For example:
 ```
 
 
-The add command supports some optional attributes which may be specified.  
+addコマンドは、指定できるいくつかのオプション属性をサポートしています。  
 **commitWithin**
 |Optional|Default: none|
 | :---: | :---: |
   
-*Add the document within the specified number of milliseconds.*  
+*指定されたミリ秒の間にドキュメントを追加してください。*  
 **overwrite**
 |Optional|Default: true|
 | :---: | :---: |
   
-*Indicates if the unique key constraints should be checked to overwrite previous versions of the same document (see below).*
+*以下を参照し、同じドキュメントの以前のバージョンを上書きするかどうかを確認するためのユニークキー制約をチェックするかどうかを示します。*
 
-If the document schema defines a unique key, then by default an /update operation to add a document will overwrite (i.e., replace) any document in the index with the same unique key.
-If no unique key has been defined, indexing performance is somewhat faster, as no check has to be made for an existing documents to replace.
+もしドキュメントスキーマが一意のキーを定義している場合、/update操作でドキュメントを追加すると、同じ一意のキーを持つインデックス内のドキュメントが上書き（つまり置き換え）されます。
+一意のキーが定義されていない場合、既存のドキュメントを置き換えるためのチェックが必要ないため、インデックスへのインデックスのパフォーマンスがやや高速になります。
 
-If you have a unique key field, but you feel confident that you can safely bypass the uniqueness check (e.g., you build your indexes in batch, and your indexing code guarantees it never adds the same document more than once) you can specify the overwrite="false" option when adding your documents.
-### XML Update Commands
+もしユニークなキーフィールドを持っているが、一意性チェックを安全にバイパスすることができると確信している場合（例えば、インデックスをバッチで構築し、インデックスコードが同じドキュメントを2回以上追加しないことを保証している場合）、ドキュメントを追加する際にoverwrite="false"オプションを指定することができます。
+### XML 更新コマンド
 
-#### Commit and Optimize During Updates
+#### 更新中にコミットして最適化する
 
 
-The <commit> operation writes all documents loaded since the last commit to one or more segment files on the disk.
-Before a commit has been issued, newly indexed content is not visible to searches.
-The commit operation opens a new searcher, and triggers any event listeners that have been configured.
+<commit>操作は、最後のコミット以降にロードされたすべてのドキュメントをディスク上の1つ以上のセグメントファイルに書き込みます。
+コミットが発行される前は、新しくインデックスされたコンテンツは検索で見ることができません。
+コミット操作は新しいサーチャーを開き、設定されているイベントリスナーをトリガーします。
 
-Commits may be issued explicitly with a <commit/> message, and can also be triggered from <autocommit> parameters in solrconfig.xml.
+コミットは<commit/>メッセージを明示的に発行することができ、solrconfig.xml内の<autocommit>パラメーターからもトリガーされることがあります。
 
-The <optimize> operation requests Solr to merge internal data structures.
-For a large index, optimization will take some time to complete, but by merging many small segment files into larger segments, search performance may improve.
-If you are using Solr’s replication mechanism to distribute searches across many systems, be aware that after an optimize, a complete index will need to be transferred.  
+<optimize>操作は、Solrに内部データ構造をマージするようリクエストします。
+大きなインデックスの場合、最適化には完了までにかなりの時間がかかるかもしれませんが、多数の小さなセグメントファイルを大きなセグメントにマージすることで、検索パフォーマンスが向上する可能性があります。
+多数のシステムに検索を分散するためにSolrのレプリケーションメカニズムを使用している場合は、最適化後に完全なインデックスを転送する必要があることに注意してください。  
 :warning:Warning  
+オプティマイズは、静的インデックス、つまり定期的な更新プロセスの一部として最適化できるインデックスにのみ使用することを検討すべきです（1日に1回の更新など）。
+NRT機能を必要とするアプリケーションは、オプティマイズを使用すべきではありません。
 
-You should only consider using optimize on static indexes, i.e., indexes that can be optimized as part of the regular update process (say once-a-day updates).
-Applications requiring NRT functionality should not use optimize.
-
-
-The <commit> and <optimize> elements accept these optional attributes:  
+<commit>と<optimize>要素は、これらのオプション属性を受け入れます。  
 **waitSearcher**
 |Optional|Default: true|
 | :---: | :---: |
   
-*Blocks until a new searcher is opened and registered as the main query searcher, making the changes visible.*  
+*新しい検索が開かれ、主なクエリ検索として登録されるまでブロックされ、変更が表示されるようになります。*  
 **expungeDeletes**
 |Optional|Default: false|
 | :---: | :---: |
   
-*Merges segments that have more than 10% deleted docs, expunging the deleted documents in the process.Resulting segments will respect maxMergedSegmentMB.This option only applies in a <commit> operation.*  
+*10%以上の削除済みドキュメントを持つセグメントをマージし、その過程で削除済みドキュメントを完全に削除します。結果として得られるセグメントは、maxMergedSegmentMBを考慮します。このオプションは<commit>操作にのみ適用されます。*  
 **maxSegments**
 |Optional|Default: none|
 | :---: | :---: |
   
-*Makes a best effort attempt to merge the segments down to no more than this number of segments but does not guarantee that the goal will be achieved.Unless there is tangible evidence that optimizing to a small number of segments is beneficial, this parameter should be omitted and the default behavior accepted.This option only applies in a <optimize operation.Default is unlimited, resulting segments respect the maxMergedSegmentMB setting.*
+*この数以下のセグメントにマージするために最善の努力をしますが、その目標が達成されることを保証するものではありません。セグメント数を最小限にすることが有益であるという具体的な証拠がない限り、このパラメータは省略し、デフォルトの動作を受け入れるべきです。このオプションは、<optimize操作でのみ適用されます。デフォルトは無制限で、マージされたセグメントはmaxMergedSegmentMBの設定を尊重します。*
 
-Here are examples of <commit> and <optimize> using optional attributes:
+ここには、オプション属性を使用した<commit>と<optimize>の例があります。
 ```
 <commit waitSearcher="false"/>
 <commit waitSearcher="false" expungeDeletes="true"/>
 <optimize waitSearcher="false"/>
 ```
 
-#### Delete Operations
+#### 削除操作
 
 
-Documents can be deleted from the index in two ways.
-"Delete by ID" deletes the document with the specified ID, and can be used only if a UniqueID field has been defined in the schema.
-It doesn’t work for child/nested docs.
-"Delete by Query" deletes all documents matching a specified query, although commitWithin is ignored for a Delete by Query.
-A single delete message can contain multiple delete operations.
+ドキュメントは2つの方法でインデックスから削除することができます。
+「IDによる削除」は、指定されたIDを持つドキュメントを削除し、スキーマでUniqueIDフィールドが定義されている場合にのみ使用することができます。
+子/ネストされたドキュメントに対しては機能しません。
+「クエリによる削除」は、指定されたクエリに一致するすべてのドキュメントを削除しますが、commitWithinはクエリによる削除では無視されます。
+単一の削除メッセージには複数の削除操作を含めることができます。
 ```
 <delete>
   <id>0002166313</id>
@@ -145,22 +134,18 @@ A single delete message can contain multiple delete operations.
 ```
   
 :exclamation:Important  
+JoinクエリパーサーをDelete By Queryで使用する際には、ClassCastExceptionを回避するためにスコアパラメーターを値"none"で使用する必要があります。
+スコアパラメーターの詳細については、Joinクエリパーサーのセクションを参照してください。
+#### ロールバック操作
 
 
-When using the Join query parser in a Delete By Query, you should use the score parameter with a value of "none" to avoid a ClassCastException.
-See the section on the Join Query Parser for more details on the score parameter.
+ロールバックコマンドは、最後のコミット以降にインデックスに行われたすべての追加と削除を取り消します。
+イベントリスナーを呼び出したり、新しいサーチャーを作成することはありません。
+その構文は単純です：<rollback/>。
+#### グループ化操作
 
 
-#### Rollback Operations
-
-
-The rollback command rolls back all add and deletes made to the index since the last commit.
-It neither calls any event listeners nor creates a new searcher.
-Its syntax is simple: <rollback/>.
-#### Grouping Operations
-
-
-You can post several commands in a single XML file by grouping them with the surrounding <update> element.
+1つのXMLファイルに複数のコマンドを投稿することができ、<update>要素でグループ化することができます。
 ```
 <update>
   <add>
@@ -175,11 +160,11 @@ You can post several commands in a single XML file by grouping them with the sur
 </update>
 ```
 
-### Using curl to Perform Updates
+### Curlを使用して更新を実行する方法
 
 
-You can use the curl utility to perform any of the above commands, using its --data-binary option to append the XML message to the curl command, and generating a HTTP POST request.
-For example:
+上記のコマンドを実行するために、curlユーティリティを使用することができます。curlコマンドに--data-binaryオプションを使用してXMLメッセージを追加し、HTTP POSTリクエストを生成します。
+例えば、
 ```
 curl http://localhost:8983/solr/my_collection/update -H "Content-Type: text/xml" --data-binary '
 <add>
@@ -195,28 +180,27 @@ curl http://localhost:8983/solr/my_collection/update -H "Content-Type: text/xml"
 ```
 
 
-For posting XML messages contained in a file, you can use the alternative form:
+XMLメッセージを含むファイルを投稿するには、代替フォームを使用することができます。
 ```
 curl http://localhost:8983/solr/my_collection/update -H "Content-Type: text/xml" --data-binary @myfile.xml
 ```
 
 
-The approach above works well, but using the --data-binary option causes curl to load the whole myfile.xml into memory before posting it to server.
-This may be problematic when dealing with multi-gigabyte files.
-This alternative curl command performs equivalent operations but with minimal curl memory usage:
+上記のアプローチはうまく機能しますが、--data-binaryオプションを使用すると、curlがサーバーに投稿する前にmyfile.xml全体をメモリに読み込むため、問題が発生する可能性があります。
+これは、複数ギガバイトのファイルを扱う際に問題が発生する場合があります。
+次の代替curlコマンドは、同等の操作を行いますが、curlのメモリ使用量を最小限に抑えます。
 ```
 curl http://localhost:8983/solr/my_collection/update -H "Content-Type: text/xml" -T "myfile.xml" -X POST
 ```
 
 
-Short requests can also be sent using a HTTP GET command, if enabled in requestParsers element of solrconfig.xml, URL-encoding the request, as in the following.
-Note the escaping of "<" and ">":
+短い要求は、requestParsers要素のsolrconfig.xmlで有効になっている場合、HTTP GETコマンドを使用して送信することもできます。要求をURLエンコードし、次のように"<"と">"をエスケープすることに注意してください。
 ```
 curl http://localhost:8983/solr/my_collection/update?stream.body=%3Ccommit/%3E&wt=xml
 ```
 
 
-Responses from Solr take the form shown here:
+Solrからの応答は、以下に示す形式を取ります。
 ```
 <response>
   <lst name="responseHeader">
@@ -227,23 +211,23 @@ Responses from Solr take the form shown here:
 ```
 
 
-The status field will be non-zero in case of failure.
-### Using XSLT to Transform XML Index Updates
+ステータスフィールドは、失敗の場合にはゼロ以外の値になります。
+### XMLインデックスの更新を行うためにXSLTを使用する。
 
 
-The Scripting module provides a separate XSLT Update Request Handler that allows you to index any arbitrary XML by using the <tr> parameter to apply an XSL transformation.
-You must have an XSLT stylesheet in the conf/xslt directory of your configset that can transform the incoming data to the expected <add><doc/></add> format, and use the tr parameter to specify the name of that stylesheet.
+スクリプティングモジュールには、任意のXMLをインデックスするために<tr>パラメータを使用してXSL変換を適用することができる独立したXSLTアップデートリクエストハンドラが用意されています。
+configsetのconf/xsltディレクトリに、受信データを期待される<add><doc/></add>形式に変換することができるXSLTスタイルシートが必要であり、trパラメータを使用してそのスタイルシートの名前を指定する必要があります。
 
-You will need to enable the scripting Module before using this feature.
-### tr Parameter
-
-
-The XSLT Update Request Handler accepts the tr parameter, which identifies the XML transformation to use.
-The transformation must be found in the Solr conf/xslt directory.
-### XSLT Configuration
+この機能を使用する前に、スクリプトモジュールを有効にする必要があります。
+### トランスレートパラメーター
 
 
-The example below, from the sample_techproducts_configs configset in the Solr distribution, shows how the XSLT Update Request Handler is configured.
+XSLTアップデートリクエストハンドラーは、trパラメーターを受け入れます。このパラメーターは、使用するXML変換を識別します。
+変換は、Solrのconf/xsltディレクトリにある必要があります。
+### XSLTの設定
+
+
+以下の例は、Solrディストリビューションのsample_techproducts_configs configsetからXSLT Update Request Handlerがどのように設定されているかを示しています。
 ```
 <!--
   Changes to XSLT transforms are taken into account
@@ -256,12 +240,11 @@ The example below, from the sample_techproducts_configs configset in the Solr di
 ```
 
 
-A value of 5 for xsltCacheLifetimeSeconds is good for development, to see XSLT changes quickly.
-For production you probably want a much higher value.
-### XSLT Update Example
+xsltCacheLifetimeSecondsの値が5であれば、XSLTの変更を素早く確認するために開発には良いでしょう。本番環境では、おそらくより高い値を設定することが望ましいでしょう。
+### XSLTアップデートの例
 
 
-Here is the sample_techproducts_configs/conf/xslt/updateXml.xsl XSL file for converting standard Solr XML output to the Solr expected <add><doc/></add> format:
+以下は、標準のSolr XML出力をSolrが期待する<add><doc/></add>形式に変換するためのサンプル_techproducts_configs/conf/xslt/updateXml.xsl XSLファイルです。
 ```
 <xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'>
   <xsl:output media-type="text/xml" method="xml" indent="yes"/>
@@ -302,8 +285,7 @@ Here is the sample_techproducts_configs/conf/xslt/updateXml.xsl XSL file for con
 ```
 
 
-This stylesheet transforms Solr’s XML search result format into Solr’s Update XML syntax.
-One example usage would be to copy a Solr 1.3 index (which does not have CSV response writer) into a format which can be indexed into another Solr file (provided that all fields are stored):
+このスタイルシートは、SolrのXML検索結果フォーマットをSolrのUpdate XML構文に変換します。例えば、すべてのフィールドが保存されていることが前提となる別のSolrファイルにインデックスできる形式に、Solr 1.3のインデックス（CSVレスポンスライターがない）をコピーすることができます。
 ```
 $ curl -o standard_solr_xml_format.xml "http://localhost:8983/solr/techproducts/select?q=ipod&fl=id,cat,name,popularity,price,score&wt=xml"
 
@@ -311,29 +293,27 @@ $ curl -X POST -H "Content-Type: text/xml" -d @standard_solr_xml_format.xml "htt
 ```
   
 :information_source:Note  
-
-You can see the opposite export/import cycle using the tr parameter in the Response Writer XSLT example.
-
-## JSON Formatted Index Updates
+Response Writer XSLTの例では、trパラメータを使用することで、反対のエクスポート/インポートサイクルを見ることができます。
+## JSON形式のインデックス更新
 
 
-Solr can accept JSON that conforms to a defined structure, or can accept arbitrary JSON-formatted documents.
-If sending arbitrarily formatted JSON, there are some additional parameters that need to be sent with the update request, described in the section Transforming and Indexing Custom JSON.
-### Solr-Style JSON
+Solrは定義された構造に準拠するJSONを受け入れることができます。また、任意のJSON形式のドキュメントを受け入れることもできます。
+任意の形式のJSONを送信する場合、更新リクエストと一緒に送信する必要がある追加パラメータがあります。これらのパラメータについては、セクション「カスタムJSONの変換とインデックス化」で説明されています。
+### SolrスタイルのJSON
 
 
-JSON formatted update requests may be sent to Solr’s /update handler using Content-Type: application/json or Content-Type: text/json.
+JSON形式の更新リクエストは、Content-Type: application/jsonまたはContent-Type: text/jsonを使用してSolrの/updateハンドラーに送信することができます。
 
-JSON formatted updates can take 3 basic forms, described in depth below:
+JSON形式の更新は、以下で詳しく説明する3つの基本形式があります。
 - A single document, expressed as a top level JSON Object.
 To differentiate this from a set of commands, the json.command=false request parameter is required.
 - A list of documents, expressed as a top level JSON Array containing a JSON Object per document.
 - A sequence of update commands, expressed as a top level JSON Object (a Map).
 
-#### Adding a Single JSON Document
+#### 単一のJSONドキュメントを追加する
 
 
-The simplest way to add documents via JSON is to send each document individually as a JSON Object, using the /update/json/docs path:
+JSONを使用してドキュメントを追加する最も簡単な方法は、各ドキュメントをJSONオブジェクトとして個別に送信することです。 /update/json/docsパスを使用してください。
 ```
 curl -X POST -H 'Content-Type: application/json' 'http://localhost:8983/solr/my_collection/update/json/docs' --data-binary '
 {
@@ -342,10 +322,10 @@ curl -X POST -H 'Content-Type: application/json' 'http://localhost:8983/solr/my_
 }'
 ```
 
-#### Adding Multiple JSON Documents
+#### 複数のJSONドキュメントの追加
 
 
-Adding multiple documents at one time via JSON can be done via a JSON Array of JSON Objects, where each object represents a document:
+JSONを使用して複数のドキュメントを一度に追加することは、各オブジェクトがドキュメントを表すJSONオブジェクトのJSON配列を介して行うことができます。
 ```
 curl -X POST -H 'Content-Type: application/json' 'http://localhost:8983/solr/my_collection/update' --data-binary '
 [
@@ -361,16 +341,16 @@ curl -X POST -H 'Content-Type: application/json' 'http://localhost:8983/solr/my_
 ```
 
 
-A sample JSON file is provided at example/exampledocs/books.json and contains an array of objects that you can add to the Solr "techproducts" example:
+サンプルのJSONファイルは、example/exampledocs/books.jsonに提供されており、オブジェクトの配列を含んでいます。これらは、Solrの「techproducts」例に追加することができます。
 ```
 curl 'http://localhost:8983/solr/techproducts/update?commit=true' --data-binary @example/exampledocs/books.json -H 'Content-type:application/json'
 ```
 
-#### Sending JSON Update Commands
+#### JSONアップデートコマンドを送信する。
 
 
-In general, the JSON update syntax supports all of the update commands that the XML update handler supports, through a straightforward mapping.
-Multiple commands, adding and deleting documents, may be contained in one message:
+一般的に、JSONの更新構文は、XMLの更新ハンドラがサポートするすべての更新コマンドを、直接的なマッピングを通してサポートします。
+複数のコマンド、ドキュメントの追加や削除が、1つのメッセージに含まれる場合があります。
 ```
 curl -X POST -H 'Content-Type: application/json' 'http://localhost:8983/solr/my_collection/update' --data-binary '
 {
@@ -399,25 +379,25 @@ curl -X POST -H 'Content-Type: application/json' 'http://localhost:8983/solr/my_
 ```
 
 
-As with other update handlers, parameters such as commit, commitWithin, optimize, and overwrite may be specified in the URL instead of in the body of the message.
+他のアップデートハンドラーと同様に、commit、commitWithin、optimize、およびoverwriteなどのパラメーターは、メッセージの本文ではなくURLに指定することもできます。
 
-The JSON update format allows for a simple delete-by-id.
-The value of a delete can be an array which contains a list of zero or more specific document id’s (not a range) to be deleted.
-For example, a single document:
+JSONのアップデートフォーマットでは、簡単なIDによる削除が可能です。
+削除の値は、削除される特定のドキュメントIDのリスト（範囲ではなく）を含む配列になります。
+例えば、単一のドキュメント:
 ```
 { "delete":"myid" }
 ```
 
 
-Or a list of document IDs:
+またはドキュメントIDのリスト：
 ```
 { "delete":["id1","id2"] }
 ```
 
 
-Note: Delete-by-id doesn’t work for child/nested docs.
+注：IDによる削除は子/ネストドキュメントに対して機能しません。
 
-You can also specify _version_ with each "delete":
+各「削除」に_version_を指定することもできます。
 ```
 {
   "delete":"id":50,
@@ -426,138 +406,138 @@ You can also specify _version_ with each "delete":
 ```
 
 
-You can specify the version of deletes in the body of the update request as well.
-### JSON Update Convenience Paths
+アップデートリクエストの本文でも、削除のバージョンを指定することができます。
+### JSONの更新便利パス
 
 
-In addition to the /update handler, there are a few additional JSON specific request handler paths available by default in Solr, that implicitly override the behavior of some request parameters:
+Solrには、/updateハンドラーに加えて、いくつかの追加のJSON固有のリクエストハンドラーのパスがデフォルトで利用可能です。これらのパスは、いくつかのリクエストパラメーターの動作を暗黙的にオーバーライドします。
 
-The /update/json path may be useful for clients sending in JSON formatted update commands from applications where setting the Content-Type proves difficult, while the /update/json/docs path can be particularly convenient for clients that always want to send in documents â either individually or as a list â without needing to worry about the full JSON command syntax.
-### Custom JSON Documents
-
-
-Solr can support custom JSON.
-This is covered in the section Transforming and Indexing Custom JSON.
-## CSV Formatted Index Updates
+/update/jsonパスは、Content-Typeの設定が困難なアプリケーションからJSON形式の更新コマンドを送信するクライアントにとって便利な場合があります。一方、/update/json/docsパスは、個々のドキュメントまたはリストとして常に送信したいクライアントにとって、フルJSONコマンド構文を気にする必要がなく特に便利です。
+### カスタムJSONドキュメント
 
 
-CSV formatted update requests may be sent to Solr’s /update handler using Content-Type: application/csv or Content-Type: text/csv.
+SolrはカスタムJSONをサポートすることができます。
+これは「カスタムJSONの変換とインデックス化」のセクションでカバーされています。
+## CSV形式のインデックスの更新
 
-A sample CSV file is provided at example/exampledocs/books.csv that you can use to add some documents to the Solr "techproducts" example:
+
+CSV形式の更新リクエストは、Content-Type: application/csvまたはContent-Type: text/csvを使用して、Solrの/updateハンドラーに送信することができます。
+
+「example/exampledocs/books.csv」には、Solrの「techproducts」例にいくつかのドキュメントを追加するために使用できるサンプルのCSVファイルが提供されています。
 ```
 curl 'http://localhost:8983/solr/my_collection/update?commit=true' --data-binary @example/exampledocs/books.csv -H 'Content-type:application/csv'
 ```
 
-### CSV Update Parameters
+### CSV更新パラメーター
 
 
-The CSV handler allows the specification of many parameters in the URL in the form: f.parameter.optional_fieldname=value.
+CSVハンドラーは、URLのf.parameter.optional_fieldname=valueの形式で多数のパラメーターの指定を可能にします。
 
-The table below describes the parameters for the update handler.  
+以下の表は、アップデートハンドラーのパラメーターを説明しています。  
 **separator**
 |Optional|Default: ,|
 | :---: | :---: |
   
-*Character used as field separator.This parameter is global; for per-field usage, see the split parameter.*  
+*フィールドの区切りとして使用される文字。このパラメータはグローバルであり、フィールドごとの使用については、分割パラメータを参照してください。*  
 **trim**
 |Optional|Default: false|
 | :---: | :---: |
   
-*If true, remove leading and trailing whitespace from values.This parameter can be either global or per-field.*  
+*もしtrueなら、値から前後の空白を削除します。このパラメータはグローバルまたはフィールドごとに設定することができます。*  
 **header**
 |Optional|Default: true|
 | :---: | :---: |
   
-*Set to true if first line of input contains field names.These will be used if the fieldnames parameter is absent.This parameter is global.*  
+*最初の入力行にフィールド名が含まれている場合はtrueに設定します。フィールド名パラメータが存在しない場合に使用されます。このパラメータはグローバルです。*  
 **fieldnames**
 |Optional|Default: none|
 | :---: | :---: |
   
-*Comma-separated list of field names to use when adding documents.This parameter is global.*  
+*ドキュメントを追加する際に使用するフィールド名のコンマ区切りリスト。このパラメーターはグローバルです。*  
 **literal.field_name**
 |Optional|Default: none|
 | :---: | :---: |
   
-*A literal value for a specified field name.This parameter is global.*  
+*指定されたフィールド名のための文字通りの値。このパラメータはグローバルです。*  
 **skip**
 |Optional|Default: none|
 | :---: | :---: |
   
-*Comma separated list of field names to skip.This parameter is global.*  
+*スキップするフィールド名のコンマ区切りリストです。このパラメータはグローバルです。*  
 **skipLines**
 |Optional|Default: 0|
 | :---: | :---: |
   
-*Number of lines to discard in the input stream before the CSV data starts, including the header, if present.This parameter is global.*  
+*入力ストリームでCSVデータが始まる前に破棄する行数の数、ヘッダーがある場合はそれも含める。このパラメーターはグローバルです。*  
 **encapsulator**
 |Optional|Default: none|
 | :---: | :---: |
   
-*The character optionally used to surround values to preserve characters such as the CSV separator or whitespace.This standard CSV format handles the encapsulator itself appearing in an encapsulated value by doubling the encapsulator.*  
+*文字列を囲むために使用されるオプションの文字は、CSVの区切り記号や空白などの文字を保持するために使用されます。この標準的なCSV形式では、囲み文字が囲まれた値内に現れる場合には、囲み文字を二重にすることで処理されます。*  
 **escape**
 |Optional|Default: none|
 | :---: | :---: |
   
-*The character used for escaping CSV separators or other reserved character.If an escape is specified, the encapsulator is not used unless also explicitly specified since most formats use either encapsulation or escaping, not both.*  
+*CSVセパレーターまたは他の予約文字をエスケープするために使用される文字。エスケープが指定されている場合、ほとんどのフォーマットではカプセル化またはエスケープのどちらかが使用されるため、カプセル化も明示的に指定されていない限り使用されません。*  
 **keepEmpty**
 |Optional|Default: false|
 | :---: | :---: |
   
-*Keep and index zero length (empty) fields.This parameter can be global or per-field.*  
+*空の長さがゼロのフィールドを保持し、インデックス化します。このパラメーターはグローバルまたはフィールドごとに設定できます。*  
 **map**
 |Optional|Default: none|
 | :---: | :---: |
   
-*Map one value to another.Format is map=value:replacement (which can be empty).This parameter can be global or per-field.*  
+*別の値に1つの値をマッピングします。フォーマットはmap=value:replacementです（replacementは空にすることもできます）。このパラメータはグローバルまたはフィールドごとに設定することができます。*  
 **split**
 |Optional|Default: none|
 | :---: | :---: |
   
-*If true, split a field into multiple values by a separate parser.This parameter is used on a per-field basis, for example f.FIELD_NAME_GOES_HERE.split=true.*  
+*もし真であれば、フィールドを個別のパーサーによって複数の値に分割します。このパラメータはフィールドごとに使用されます。例えば、f.FIELD_NAME_GOES_HERE.split=trueとなります。*  
 **overwrite**
 |Optional|Default: true|
 | :---: | :---: |
   
-*If true, check for and overwrite duplicate documents, based on the uniqueKey field declared in the Solr schema.If you know the documents you are indexing do not contain any duplicates then you may see a considerable speed up setting this to false.*  
+*もし真であれば、Solrスキーマで宣言されたuniqueKeyフィールドに基づいて重複ドキュメントをチェックし上書きします。インデックスを作成するドキュメントに重複が含まれていないことがわかっている場合は、falseに設定することでかなりの高速化が見られるかもしれません。*  
 **commit**
 |Optional|Default: none|
 | :---: | :---: |
   
-*Issues a commit after the data has been ingested.This parameter is global.*  
+*データが取り込まれた後、コミットを発行します。このパラメータはグローバルです。*  
 **commitWithin**
 |Optional|Default: none|
 | :---: | :---: |
   
-*Add the document within the specified number of milliseconds.This parameter is global.*  
+*指定されたミリ秒数内にドキュメントを追加してください。このパラメーターはグローバルです。*  
 **rowid**
 |Optional|Default: none|
 | :---: | :---: |
   
-*Map the rowid (line number) to a field specified by the value of the parameter, for instance if your CSV doesn’t have a unique key and you want to use the row id as such.This parameter is global.*  
+*行番号（rowid）を、パラメータの値で指定されたフィールドにマップします。例えば、CSVに一意のキーがなく、行番号をそれとして使用したい場合は、このパラメータをグローバルに設定します。*  
 **rowidOffset**
 |Optional|Default: 0|
 | :---: | :---: |
   
-*Add the given offset (as an integer) to the rowid before adding it to the document.This parameter is global.*
-### Indexing Tab-Delimited files
+*ドキュメントに追加する前に、与えられたオフセット（整数として）をrowidに追加してください。このパラメータはグローバルです。*
+### インデックスタブ区切りファイルの索引付け
 
 
-The same feature used to index CSV documents can also be easily used to index tab-delimited files (TSV files) and even handle backslash escaping rather than CSV encapsulation.
+CSVドキュメントをインデックスするのに使用される同じ機能は、タブ区切りファイル（TSVファイル）をインデックスするためにも簡単に使用することができ、さらにCSVのカプセル化ではなくバックスラッシュのエスケープを処理することもできます。
 
-For example, one can dump a MySQL table to a tab-delimited file with:
+例えば、MySQLのテーブルをタブ区切りファイルにダンプすることができます。
 ```
 SELECT * INTO OUTFILE '/tmp/result.txt' FROM mytable;
 ```
 
 
-This file could then be imported into Solr by setting the separator to tab (%09) and the escape to backslash (%5c).
+このファイルは、区切り文字をタブ（%09）に設定し、エスケープ文字をバックスラッシュ（%5c）に設定することで、Solrにインポートすることができます。
 ```
 curl 'http://localhost:8983/solr/my_collection/update/csv?commit=true&separator=%09&escape=%5c' --data-binary @/tmp/result.txt
 ```
 
-### CSV Update Convenience Paths
+### CSVの更新の便利なパス
 
 
-In addition to the /update handler, there is an additional CSV specific request handler path available by default in Solr, that implicitly override the behavior of some request parameters:
+/updateハンドラーに加えて、Solrではデフォルトで追加のCSV専用のリクエストハンドラーパスが利用可能です。これは一部のリクエストパラメーターの挙動を暗黙的に上書きします。
 
-The /update/csv path may be useful for clients sending in CSV formatted update commands from applications where setting the Content-Type proves difficult.
+/update/csvのパスは、コンテンツタイプの設定が難しいアプリケーションからCSV形式の更新コマンドを送信するクライアントにとって便利な場合があります。

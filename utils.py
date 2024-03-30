@@ -3,6 +3,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from bs4 import BeautifulSoup as bs
 import requests
 import json
+import configparser
 
 client = OpenAI()
 
@@ -14,6 +15,18 @@ def translate_func(text, target_language):
     model = "gpt-3.5-turbo-instruct",
     stop=None)
     return response.choices[0].text.strip()
+
+def process_translation(text):
+    config=configparser.ConfigParser()
+    config.read('config.ini')
+    target_lang = config.get('translation','target.lang')
+    source_lang = config.get('translation','source.lang')
+    if source_lang == target_lang:
+        return text
+    elif target_lang == "" or target_lang == "none":
+        return text
+    else:
+        return translate_func(text,target_lang)
 
 #Function to split data into smaller chunks
 def split_data(docs):
@@ -217,10 +230,10 @@ def walkthrough_to_md(sect, sectLayer, mdFile):
   mdFileLevel = int(nextSect[-1]) + 1
   for element in sect_group:
     if element.find(title_tag):
-      title = element.find(title_tag).text
+      title = process_translation(element.find(title_tag).text)
       mdFile.new_header(level=mdFileLevel, title=title)
     if 'paragraph' in element['class']:
-      paragraphs = build_paragraphs(element)
+      paragraphs = process_translation(build_paragraphs(element))
       mdFile.new_paragraph(paragraphs)
     elif 'listingblock' in element['class']:
       code_data = element.find('code').text
@@ -252,7 +265,7 @@ def insert_dlist(dlist,mdFile):
                 mdFile.new_table(len(td_data),1,td_data, 'center')
             paragraph = child.find('div', class_='paragraph')
             if paragraph:
-                mdFile.new_line(paragraph.text.replace('\n',''), bold_italics_code='i')
+                mdFile.new_line(process_translation(paragraph.text.replace('\n','')), bold_italics_code='i')
 
     
 
@@ -269,7 +282,7 @@ def insert_marks(message_sect,mdFile):
                 elif info == 'Note':
                   mdFile.new_line(':information_source:'+child.find('i').get('title'))
             elif child.get('class') == ['content']:
-                mdFile.new_line(child.text)
+                mdFile.new_line(process_translation(child.text))
                 
 
     

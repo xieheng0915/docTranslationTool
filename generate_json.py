@@ -3,8 +3,9 @@ import requests
 import json
 from utils import *
 
-html_link = "https://solr.apache.org/guide/solr/latest/indexing-guide/indexing-with-update-handlers.html"
+load_dotenv()
 
+html_link = "https://solr.apache.org/guide/solr/latest/indexing-guide/indexing-with-update-handlers.html"
 
 
 headers = {
